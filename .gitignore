@@ -1,0 +1,9 @@
+# Vagrant
+.vagrant
+*.log
+
+# VS Code
+.history
+
+# Ansible
+**/*.retry

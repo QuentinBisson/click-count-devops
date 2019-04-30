@@ -1,0 +1,7 @@
+Host staging
+   StrictHostKeyChecking no
+   UserKnownHostsFile=/dev/null
+
+Host production
+   StrictHostKeyChecking no
+   UserKnownHostsFile=/dev/null

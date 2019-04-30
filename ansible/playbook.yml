@@ -1,0 +1,32 @@
+---
+- name: Initial setup of an Ansible "client" host.
+  hosts: all
+  become: yes
+  gather_facts: false
+
+  pre_tasks:
+  - name: install python
+    raw: test -e /usr/bin/python || (apt -qqy update && apt install -y python)
+    register: output
+    changed_when: output.stdout != ""
+
+- name: Install docker on all servers.
+  hosts: all
+  remote_user: vagrant
+  roles:
+    - docker
+
+- name: Install Redis on staging and production.
+  hosts: clickcount
+  remote_user: vagrant
+  become: yes
+  roles:
+    - redis
+
+- name: Install jenkins on the build server.
+  hosts: build
+  remote_user: vagrant
+  become: yes
+
+  roles:
+  - jenkins

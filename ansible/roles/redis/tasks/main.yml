@@ -1,0 +1,21 @@
+---
+- name: Create redis container network.
+  docker_network:
+    name: "{{ redis_container_network }}"
+
+- name: Start redis container.
+  become: yes
+  docker_container:
+    name: "{{ redis_container_name }}"
+    image: "{{ redis_container_image }}"
+    state: started
+    restart_policy: on-failure
+    networks:
+    - name: "{{ redis_container_network }}"
+    volumes:
+      - "{{ redis_container_storage_location }}:/data:rw"
+
+- name: Check redis container status.
+  command: docker ps
+  register: result
+- debug: var=result.stdout

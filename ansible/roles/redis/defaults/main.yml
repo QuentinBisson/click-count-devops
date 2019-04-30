@@ -1,0 +1,5 @@
+---
+redis_container_image: redis:5.0.4-alpine
+redis_container_name: redis
+redis_container_network: redis-network
+redis_container_storage_location: /srv/redis/data

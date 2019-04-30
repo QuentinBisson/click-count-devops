@@ -1,0 +1,10 @@
+galaxy_info:
+  author: qbisson
+  description: Configure Jenkins and jobs.
+  license: GPLv3
+
+  min_ansible_version: 2.4
+
+  galaxy_tags: []
+
+dependencies: []

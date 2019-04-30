@@ -1,0 +1,110 @@
+---
+- include_role:
+    name: geerlingguy.jenkins
+    public: yes
+  vars:
+    jenkins_plugins: 
+    - git
+    - configuration-as-code
+    - cloudbees-folder
+    - blueocean
+    - pipeline-utility-steps
+    - credentials
+    - plain-credentials
+    - ssh-credentials
+    - configuration-as-code-support
+
+- include_role:
+    name: geerlingguy.git
+
+- name: Allow Jenkins user to start container.
+  become: yes
+  command: "usermod -aG docker {{ jenkins_process_user }}"
+
+- name: Create Jenkins ssh directory.
+  file:
+    path: "{{ jenkins_home }}/.ssh"
+    state: directory
+    owner: "{{ jenkins_process_user }}"
+    group: "{{ jenkins_process_user }}"
+    mode: 0500
+
+- name: Copy ssh keys to allow Jenkins access to other boxes.
+  copy:
+    src: "{{ role_path }}/files/ssh/config"
+    dest: "{{ jenkins_home }}/.ssh/config"
+
+- name: Copy ssh keys to allow Jenkins access to other boxes.
+  command: "cp /home/vagrant/.ssh/id_rsa {{ jenkins_home }}/.ssh/id_rsa"
+
+- name: Change owner and user on ssh key.
+  file:
+    path: "{{item}}"
+    state: file
+    owner: "{{ jenkins_process_user }}"
+    group: "{{ jenkins_process_user }}"
+    mode: 0400
+  with_items:
+  - "{{ jenkins_home }}/.ssh/id_rsa"
+  - "{{ jenkins_home }}/.ssh/config"
+
+- name: Fix a defect to disable setup wizard.
+  jenkins_script:
+    script: |
+      import static jenkins.model.Jenkins.instance as jenkins
+      import jenkins.install.InstallState
+      if (!jenkins.installState.isSetupComplete()) {
+        InstallState.INITIAL_SETUP_COMPLETED.initializeState()
+      }
+    user: "{{ jenkins_admin_username }}"
+    password: "{{ jenkins_admin_password }}"
+
+- name: Copy pipeline onto server.
+  copy:
+    src: "{{ role_path }}/files/clickcount.xml"
+    dest: "{{ jenkins_home }}/clickcount.xml"
+
+- name: Add Configuration-as-code configuration.
+  template:
+    src: templates/jenkins.yml.j2
+    dest: "{{ jenkins_home }}/jenkins.yaml"
+
+- name: Restart Jenkins to apply configuration.
+  service: name=jenkins state=restarted enabled=yes
+
+- name: Wait for Jenkins to restart before proceeding.
+  command: >
+    curl -D - --silent --max-time 5 http://{{ jenkins_hostname }}:{{ jenkins_http_port }}{{ jenkins_url_prefix }}/cli/
+  args:
+    warn: false
+  register: result
+  until: >
+    (result.stdout.find("403 Forbidden") != -1)
+    or (result.stdout.find("200 OK") != -1)
+    and (result.stdout.find("Please wait while") == -1)
+  retries: "{{ jenkins_connection_retries }}"
+  delay: "{{ jenkins_connection_delay }}"
+  changed_when: false
+  check_mode: false
+
+- name: Get Jenkins Job.
+  become: yes
+  shell: "java -jar {{ jenkins_jar_location }} -auth {{jenkins_admin_username}}:{{jenkins_admin_password}} -s http://localhost:8080/ get-job {{item.name}}"
+  register: job_result
+  ignore_errors: yes
+  with_items: 
+  - name: clickcount
+  
+- name: Create Jenkins job.
+  become: yes
+  shell: "java -jar {{ jenkins_jar_location }} -auth {{jenkins_admin_username}}:{{jenkins_admin_password}} -s http://localhost:8080/ create-job {{item.name}} < {{jenkins_home}}/{{item.xml_name}}"
+  with_items: 
+  - { name: clickcount, xml_name: 'clickcount.xml'}
+  when: job_result is failed
+
+- name: Update existing Jenkins job.
+  become: yes
+  shell: "java -jar {{ jenkins_jar_location }} -auth {{jenkins_admin_username}}:{{jenkins_admin_password}} -s http://localhost:8080/ update-job {{item.name}} < {{jenkins_home}}/{{item.xml_name}}"
+  with_items: 
+  - { name: clickcount, xml_name: 'clickcount.xml'}
+  when: job_result is succeeded
